@@ -8,6 +8,3 @@ __pycache__/
 projects/*
 !projects/.gitkeep
 
-# Personal saved resources (keep the folder itself)
-resources/*
-!resources/.gitkeep
