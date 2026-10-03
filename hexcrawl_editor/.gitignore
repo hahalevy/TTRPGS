@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+*.hexproj.bak
+
+# Personal saved projects (keep the folder itself)
+projects/*
+!projects/.gitkeep
+
+# Personal saved resources (keep the folder itself)
+resources/*
+!resources/.gitkeep

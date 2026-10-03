@@ -1,0 +1,4 @@
+# Base map images are usually someone else's copyrighted art - never commit them.
+# Applies to every resources/maps/ folder in the repo; .gitkeep keeps the folders.
+**/resources/maps/*
+!**/resources/maps/.gitkeep
