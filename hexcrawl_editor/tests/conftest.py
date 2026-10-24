@@ -3,9 +3,16 @@ import sys
 from pathlib import Path
 
 import pytest
-
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+
+@pytest.fixture(autouse=True)
+def fresh_preferences():
+    """Last-used values live in the open project; start every test from a blank one."""
+    from hexcrawl.app_config import use_preferences
+
+    use_preferences({})
 
 
 @pytest.fixture(autouse=True)

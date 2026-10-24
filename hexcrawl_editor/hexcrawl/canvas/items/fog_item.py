@@ -1,11 +1,48 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QPainter, QPainterPath
+from PySide6.QtGui import QColor, QPainter, QPainterPath
 from PySide6.QtWidgets import QGraphicsItem, QStyleOptionGraphicsItem, QWidget
 
 from ...models.elements import FogMaskElement
-from ..fog_paint import fog_path, paint_fog
+
+
+# Fog model: `element.regions` is a list of {"rect": [x,y,w,h], "mode": "hide"|"reveal"}
+# rectangles in drawing order. The covered area is the union of all "hide" rectangles
+# minus the union of all "reveal" rectangles, so a reveal punches a true partial hole
+# whichever hide rectangles it overlaps. With no regions nothing is covered.
+def _union_path(rects: list) -> QPainterPath:
+    path = QPainterPath()
+    for rect in rects:
+        x, y, w, h = rect["rect"]
+        piece = QPainterPath()
+        piece.addRect(QRectF(x, y, w, h))
+        path = path.united(piece)
+    return path
+
+
+def fog_path(element: FogMaskElement, bounds: QRectF) -> QPainterPath:
+    hide_rects = [r for r in element.regions if r.get("mode", "hide") == "hide"]
+    reveal_rects = [r for r in element.regions if r.get("mode") == "reveal"]
+    covered = _union_path(hide_rects)
+    if reveal_rects:
+        covered = covered.subtracted(_union_path(reveal_rects))
+    return covered.intersected(_bounds_path(bounds))
+
+
+def _bounds_path(bounds: QRectF) -> QPainterPath:
+    path = QPainterPath()
+    path.addRect(bounds)
+    return path
+
+
+def paint_fog(painter: QPainter, element: FogMaskElement, bounds: QRectF) -> None:
+    painter.save()
+    painter.setOpacity(painter.opacity() * element.base_opacity)
+    painter.setPen(QColor(0, 0, 0, 0))
+    painter.setBrush(QColor(element.color))
+    painter.drawPath(fog_path(element, bounds))
+    painter.restore()
 
 
 class FogMaskItem(QGraphicsItem):

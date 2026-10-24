@@ -30,7 +30,9 @@ class DecorationControls(QGroupBox):
     def value(self) -> DecorationStyle:
         return DecorationStyle(enabled=self.isChecked(), **self._binder.values())
 
-    def set_value(self, style: DecorationStyle) -> None:
+    def set_value(self, style: DecorationStyle | dict) -> None:
+        if isinstance(style, dict):  # e.g. read from the defaults/saved-values files
+            style = DecorationStyle.from_dict(style)
         blocked = self.blockSignals(True)
         self.setChecked(style.enabled)
         self.blockSignals(blocked)

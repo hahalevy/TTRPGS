@@ -39,10 +39,11 @@ hexcrawl_editor/
 │   └── ui/                   # main window and panels, all bound to elements via FieldBinder
 ├── resources/
 │   ├── maps/                 # your base map images (git-ignored: usually someone else's art)
-│   ├── fonts/                # extra .ttf/.otf fonts, auto-loaded at startup
+│   ├── defaults.json         # factory defaults for every tool (the config file)
+│   ├── fonts/                # bundled open-license fonts, one folder per family (+ its OFL.txt)
 │   └── assets/               # icon library; one subfolder per category (Structures/, Terrain/)
 ├── projects/                 # suggested place for your .hexproj files (contents are git-ignored)
-├── scripts/fetch_icons.py    # (re)downloads the starter icon library
+├── scripts/                  # fetch_icons.py / fetch_fonts.py: (re)download the bundled libraries
 └── tests/                    # model tests + offscreen GUI tests driving real mouse events
 ```
 
@@ -59,28 +60,46 @@ hexcrawl_editor/
    name checkbox marks rows for **Delete Checked**.
 3. **Mouse:** left button = the current tool, right button = select (click, or drag a
    box) and move (drag an element), middle button = pan, wheel = zoom.
-4. **Tools are picked from the side tabs** - choosing a tab or section *is* choosing the
+4. **Side panels** (Layers plus the tool tabs) can be dragged to rearrange but not
+   closed or floated, so they can't get lost.
+5. **Tools are picked from the side tabs** - choosing a tab or section *is* choosing the
    tool: **Draw** (Line / Shapes sections), **Fog**, **Assets**, **Labels**.
-5. **Fog**: drag a rectangle; the Fog tab's Mode decides whether it hides or reveals.
-6. **Labels/Assets**: set text/font or pick a thumbnail, then left-click to place. Both
-   tabs keep the last 5 used, and the label font is remembered across restarts.
-7. **Editing**: right-click any element to select it - its tab opens showing its values,
+6. **Fog**: drag a rectangle; the Fog tab's Mode decides whether it hides or reveals.
+7. **Labels/Assets**: set text/font or pick a thumbnail, then left-click to place. Both
+   tabs keep the last 5 used, and the label font is remembered per project.
+8. **Editing**: right-click any element to select it - its tab opens showing its values,
    and changing them edits it (same for lines, shapes, labels and assets). Handles:
    corner = resize, top = rotate, edges = stretch, red = delete; Delete key also works.
    **Ctrl+right-click** toggles visibility. **Ctrl+C / Ctrl+V** copy and paste the
    selected elements (any number, any kind) into the active layer - centered on the mouse
    if it is over the map. Everything is undoable (Ctrl+Z / Ctrl+Y).
-8. **File > Export PNG...** lets you choose "Full map" or "Current view" as the
+9. **File > Export PNG...** lets you choose "Full map" or "Current view" as the
    export region, and either the original resolution or a custom one. Export
    flattens whatever is currently visible — there's no separate DM/player mode;
    toggle what you want hidden, export the player version, toggle back, export
    the DM version.
-9. **File > Save/Save As** writes a `.hexproj` file (a zip containing the full
+10. **File > Save/Save As** writes a `.hexproj` file (a zip containing the full
    editable project, including base map settings and background color). The base map
    is referenced by a path relative to the project file, so move the project and the
    map together; if the map can't be found on open, you're asked to locate it. The
    `projects/` folder is a convenient place to keep them - its contents are ignored by
    git, so personal campaigns never get committed.
+   Closing the app (or starting/opening another project) with unsaved changes asks
+   whether to **Save**, **Discard** or **Cancel**; Save opens the Save As dialog for a
+   project that has no file yet.
+
+## Defaults and remembered settings
+
+- **`resources/defaults.json`** is the config file: the factory defaults for every tool -
+  label font (EB Garamond Medium, size 30), colors (black everywhere), widths, line
+  style, borders (off), outlines (white, 2 wide, labels only), fog, asset size, canvas
+  background and layer names. Edit it and restart to change what new projects start with.
+- **Last-used values belong to the project.** Every panel (line, shape, fog, labels,
+  assets: fonts, colors, widths, borders, outlines, the chosen icon, and the "recently
+  used" strips) remembers your last choices *inside the `.hexproj`*. Open a saved project
+  and its values come back; a **New project** starts from the defaults again. Label
+  *text* is not remembered. (Changing a value alone doesn't count as an unsaved change.)
+- Elements already placed keep their own settings; defaults only affect new ones.
 
 ## Assets and fonts
 
@@ -93,9 +112,20 @@ hexcrawl_editor/
   category tab (click **Refresh**). Any format Qt reads works without conversion (SVG,
   PNG, JPG, WebP, ...). Vector icons render crisp at any zoom, and every asset is placed
   at the same small default size (resize with its handles).
-- Drop `.ttf`/`.otf` font files into `resources/fonts/` to have them auto-loaded at
-  startup, or use **Import Font...** in the Labels panel to load one at runtime
-  (not copied into the project).
+- **Fonts:** 20 open-license (SIL OFL 1.1) families from Google Fonts ship in
+  `resources/fonts/` - clean (Open Sans), classical serif (EB Garamond, IM Fell...),
+  inscriptional (Cinzel...), medieval/fantasy (MedievalSharp, Uncial Antiqua...),
+  blackletter (Pirata One, Grenze Gotisch) and handwritten/display. Each family keeps
+  its `OFL.txt` beside the font (required by the license; credits in
+  `resources/fonts/ATTRIBUTION.md`). `scripts/fetch_fonts.py` lists and re-downloads
+  them; add a line there for more.
+- Add your own: put `.ttf`/`.otf` files (in any subfolder) in `resources/fonts/` - they
+  load at startup and appear in the Labels font list - or use **Import Font...** in the
+  Labels panel for a one-off (not copied into the project). Only bundled and imported
+  fonts are listed, not every font installed on your system.
+- Fonts with several weights (EB Garamond, Cinzel...) show each named weight as its own
+  entry in the font list on Windows (e.g. "EB Garamond Medium"); there is no separate
+  weight control. The default label font is EB Garamond Medium.
 
 ## Tests
 
@@ -111,8 +141,9 @@ handler fails the test. The color dialog itself is not automated.
 ## Design: one mechanism per job
 
 - **FieldBinder** (`ui/field_binder.py`) binds panel widgets to element fields. Every
-  tab uses it the same way: its values are the settings for new elements, and the
-  same binder loads and edits the selected element.
+  tab uses it the same way: its values are the settings for new elements, the
+  same binder loads and edits the selected element, and given a `key` it also starts
+  from `defaults.json` + the project's remembered values and saves them on every edit.
 - **SetFieldsCommand** (`commands/fields.py`) handles every edit - move, style,
   transform, rename, visibility, fog regions, layer effects, map settings - on
   elements, layers and the project alike, via `edit_element` / `edit_layer` /
