@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QDockWidget, QFormLayout, QLabel, QLineEdit, QPushButton, QSpinBox, QVBoxLayout, QWidget
 
-from ..app_config import DEFAULT_FONT_COLOR, DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE, get_settings
 from .color_picker_button import ColorPickerButton
 from .decoration_controls import DecorationControls
 from .field_binder import FieldBinder
@@ -10,19 +9,13 @@ from .font_manager import FontManager
 from .recent_items import RecentStrip
 from .widgets import combo, opacity_slider
 
-# Font settings remembered across app restarts (QSettings key -> default).
-REMEMBERED_FONT_FIELDS = {
-    "font_family": DEFAULT_FONT_FAMILY,
-    "font_size": DEFAULT_FONT_SIZE,
-    "font_color": DEFAULT_FONT_COLOR,
-}
+SNAPSHOT_FIELDS = ("text", "font_family", "font_size", "font_color")
 
 
 class LabelPanel(QDockWidget):
     def __init__(self, font_manager: FontManager, parent=None):
         super().__init__("Labels", parent)
         self.font_manager = font_manager
-        self.settings = get_settings()
 
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -46,31 +39,23 @@ class LabelPanel(QDockWidget):
         fields["border"], fields["outline"] = DecorationControls("Border"), DecorationControls("Outline")
         layout.addWidget(fields["border"])
         layout.addWidget(fields["outline"])
-        self.binder = FieldBinder(fields, self)
+        self.binder = FieldBinder(fields, self, key="label", skip=("text",))
 
         layout.addWidget(QLabel("Recently Used"))
         self.recent = RecentStrip(
-            describe=lambda s: (None, s["text"]), key=lambda s: (s["text"], s["font_family"])
+            describe=lambda s: (None, s["text"]), key=lambda s: (s["text"], s["font_family"]), storage_key="recent_labels"
         )
         self.recent.picked.connect(self.binder.load)
         layout.addWidget(self.recent)
         self.setWidget(container)
 
-        self.binder.load({k: self.settings.value(f"label/{k}", d, type=type(d)) for k, d in REMEMBERED_FONT_FIELDS.items()})
-        self.binder.edited.connect(self._remember_font)
-
-    def _remember_font(self) -> None:
-        values = self.binder.values()
-        for key in REMEMBERED_FONT_FIELDS:
-            self.settings.setValue(f"label/{key}", values[key])
-
     def _import_font(self) -> None:
         for family in self.font_manager.import_font_file(self):
             self.binder.load({"font_family": family})
-            self._remember_font()
+            self.binder.save()
 
     def current_settings(self) -> dict:
         return self.binder.values()
 
     def notify_label_placed(self, settings: dict) -> None:
-        self.recent.push({k: settings[k] for k in ("text", "font_family", "font_size", "font_color")})
+        self.recent.push({k: settings[k] for k in SNAPSHOT_FIELDS})

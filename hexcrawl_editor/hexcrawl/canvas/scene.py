@@ -6,6 +6,7 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QGraphicsItem, QGraphicsPixmapItem, QGraphicsRectItem, QGraphicsScene
 
+from ..defaults import DEFAULTS
 from ..models.elements import Element
 from ..models.layer import Layer
 from ..models.project import Project
@@ -16,7 +17,7 @@ from .items.label_item import LabelItem
 from .items.path_items import ShapeItem, StrokeItem
 from .layer_item import LayerGroupItem
 
-DEFAULT_CANVAS = QRectF(0, 0, 3000, 2000)  # canvas size when there is no base map
+DEFAULT_CANVAS = QRectF(0, 0, *DEFAULTS["project"]["canvas_size"])  # canvas size when there is no base map
 BACKGROUND_Z = -1_000_000  # below every layer
 
 
@@ -53,7 +54,7 @@ class HexcrawlScene(QGraphicsScene):
     def set_base_map(self, path: Path | str) -> None:
         self.project.base_map_path = str(path)
         if self.base_layer() is None:
-            self.insert_layer(Layer(name="Base Map", base_map=True), 0)
+            self.insert_layer(Layer(name=DEFAULTS["project"]["base_layer_name"], base_map=True), 0)
         self._load_base_pixmap()
 
     def base_layer(self) -> Layer | None:
@@ -115,10 +116,10 @@ class HexcrawlScene(QGraphicsScene):
         self._element_items.clear()
         if project.base_map_path and not any(layer.base_map for layer in project.layers):
             # Projects saved before the base map became a layer.
-            project.layers.insert(0, Layer(name="Base Map", base_map=True))
+            project.layers.insert(0, Layer(name=DEFAULTS["project"]["base_layer_name"], base_map=True))
         if all(layer.base_map for layer in project.layers):
             # Always start with at least one layer the user can draw into.
-            project.layers.append(Layer(name="Layer 1"))
+            project.layers.append(Layer(name=DEFAULTS["project"]["first_layer_name"]))
         for layer in project.layers:
             self._build_layer_item(layer)
         self._restack_layers()

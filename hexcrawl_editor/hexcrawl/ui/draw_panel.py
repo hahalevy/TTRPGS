@@ -32,12 +32,12 @@ class DrawPanel(QDockWidget):
         line_widgets = {"color": ColorPickerButton(), "width": width_spin(), "line_style": combo(LINE_STYLES)}
         for label, key in (("Color", "color"), ("Thickness", "width"), ("Style", "line_style")):
             form.addRow(label, line_widgets[key])
-        self.line_binder = FieldBinder(line_widgets, self)
+        self.line_binder = FieldBinder(line_widgets, self, key="line")
 
         self.shapes_section = CollapsibleSection("Shapes")
         form = QFormLayout(self.shapes_section.content)
         fill_check = QCheckBox("Fill")
-        fill_color = ColorPickerButton("#ffffff")
+        fill_color = ColorPickerButton()
         # Choosing a fill color means "fill it" (connected before the binder,
         # so the shape gets both changes in one edit).
         fill_color.colorChanged.connect(lambda _c: fill_check.setChecked(True))
@@ -48,7 +48,7 @@ class DrawPanel(QDockWidget):
         for label, key in (("Shape", "shape_type"), ("Color", "color"), ("Thickness", "width"),
                            ("Style", "line_style"), ("", "filled"), ("Fill color", "fill_color")):
             form.addRow(label, shape_widgets[key])
-        self.shape_binder = FieldBinder(shape_widgets, self)
+        self.shape_binder = FieldBinder(shape_widgets, self, key="shape")
 
         for name, section in (("line", self.line_section), ("shape", self.shapes_section)):
             layout.addWidget(section)

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QDockWidget, QFormLayout, QLabel, QListWidget, QListWidgetItem, QPushButton, QTabWidget, QVBoxLayout, QWidget,
 )
 
-from ..app_config import ASSETS_DIR
+from ..app_config import ASSETS_DIR, preferences, remember, remembered
 from ..canvas.images import image_extensions, load_image
 from .asset_scanner import scan_assets
 from .decoration_controls import DecorationControls
@@ -27,13 +27,16 @@ class AssetPanel(QDockWidget):
     def __init__(self, parent=None):
         super().__init__("Assets", parent)
         self._current_asset: str | None = None
+        self._reload_selected()
+        preferences.loaded.connect(self._reload_selected)
 
         container = QWidget()
         layout = QVBoxLayout(container)
 
         layout.addWidget(QLabel("Recently Used"))
         self.recent = RecentStrip(
-            describe=lambda rel: (thumbnail(ASSETS_DIR / rel), Path(rel).stem), icon_size=THUMB_SIZE
+            describe=lambda rel: (thumbnail(ASSETS_DIR / rel), Path(rel).stem), icon_size=THUMB_SIZE,
+            storage_key="recent_assets",
         )
         self.recent.picked.connect(self._select_asset)
         layout.addWidget(self.recent)
@@ -55,7 +58,7 @@ class AssetPanel(QDockWidget):
         fields = {"opacity": opacity, "border": DecorationControls("Border"), "outline": DecorationControls("Outline")}
         layout.addWidget(fields["border"])
         layout.addWidget(fields["outline"])
-        self.binder = FieldBinder(fields, self)
+        self.binder = FieldBinder(fields, self, key="asset")
 
         self.setWidget(container)
         self.refresh()
@@ -76,8 +79,13 @@ class AssetPanel(QDockWidget):
             grid.itemClicked.connect(lambda row: self._select_asset(row.data(Qt.ItemDataRole.UserRole)))
             self.tabs.addTab(grid, category)
 
+    def _reload_selected(self) -> None:
+        saved = remembered("asset_selected")  # last icon you picked, if it still exists
+        self._current_asset = saved if saved and (ASSETS_DIR / saved).exists() else None
+
     def _select_asset(self, relative_path: str) -> None:
         self._current_asset = relative_path
+        remember("asset_selected", relative_path)
 
     def current_settings(self) -> dict:
         return {**self.binder.values(), "asset_path": self._current_asset}

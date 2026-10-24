@@ -7,15 +7,25 @@ handles, drag math, selection - comes from TransformHandleMixin.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF
-from PySide6.QtGui import QBrush, QColor, QPainterPath
+from PySide6.QtCore import QRectF, Qt
+from PySide6.QtGui import QBrush, QColor, QPainterPath, QPen
 from PySide6.QtWidgets import QGraphicsItem, QGraphicsPathItem
 
 from ...models.elements import Element, ShapeElement, StrokeElement
-from ..style_helpers import pen_from_style
 from .handles import TransformHandleMixin
 
 Point = tuple[float, float]
+
+_LINE_STYLES = {"solid": Qt.PenStyle.SolidLine, "dashed": Qt.PenStyle.DashLine, "dotted": Qt.PenStyle.DotLine}
+
+
+def pen_from_style(color: str, width: float, line_style: str) -> QPen:
+    pen = QPen(QColor(color))
+    pen.setWidthF(max(width, 0.1))
+    pen.setStyle(_LINE_STYLES.get(line_style, Qt.PenStyle.SolidLine))
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    return pen
 
 
 def path_for_shape(shape_type: str, p1: Point, p2: Point) -> QPainterPath:

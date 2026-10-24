@@ -1,0 +1,38 @@
+{
+  "_comment": "Factory defaults. Every new project starts from these; each project then remembers its own last-used values (saved inside the project). Edit here to change what new projects start with; restart the app to apply. Colors are #rrggbb, widths are map units.",
+
+  "project": {
+    "background_color": "#ffffff",
+    "canvas_size": [3000, 2000],
+    "first_layer_name": "Layer 1",
+    "base_layer_name": "Base Map"
+  },
+
+  "line": {
+    "color": "#000000", "width": 3.0, "line_style": "solid"
+  },
+
+  "shape": {
+    "shape_type": "rectangle", "color": "#000000", "width": 3.0, "line_style": "solid",
+    "filled": false, "fill_color": "#000000"
+  },
+
+  "label": {
+    "text": "",
+    "font_family": "EB Garamond Medium", "font_size": 30, "font_color": "#000000",
+    "opacity": 1.0,
+    "border":  {"enabled": false, "color": "#000000", "width": 2.0},
+    "outline": {"enabled": true,  "color": "#ffffff", "width": 2.0}
+  },
+
+  "asset": {
+    "opacity": 1.0,
+    "size": 48.0,
+    "border":  {"enabled": false, "color": "#000000", "width": 2.0},
+    "outline": {"enabled": false, "color": "#000000", "width": 2.0}
+  },
+
+  "fog": {
+    "mode": "hide", "color": "#000000"
+  }
+}

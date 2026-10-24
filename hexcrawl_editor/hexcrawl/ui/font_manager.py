@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QFileDialog, QWidget
 from ..app_config import FONTS_DIR
 
 FALLBACK_FAMILIES = ["Arial", "Sans Serif"]
+FONT_EXTENSIONS = {".ttf", ".otf"}
 
 
 class FontManager:
@@ -18,7 +19,8 @@ class FontManager:
     def load_bundled_fonts(self) -> None:
         if not FONTS_DIR.exists():
             return
-        for font_file in sorted(FONTS_DIR.glob("*.[to]tf")):
+        # One subfolder per family (each keeps its license); loose files work too.
+        for font_file in sorted(p for p in FONTS_DIR.rglob("*") if p.suffix.lower() in FONT_EXTENSIONS):
             self._register_font_file(font_file)
 
     def _register_font_file(self, path: Path) -> list[str]:
@@ -33,11 +35,11 @@ class FontManager:
 
     def available_families(self) -> list[str]:
         if self._loaded_families:
-            return list(self._loaded_families)
+            return sorted(self._loaded_families, key=str.casefold)
         return FALLBACK_FAMILIES
 
     def import_font_file(self, parent: QWidget | None = None) -> list[str]:
-        path_str, _ = QFileDialog.getOpenFileName(parent, "Import Font", "", "Fonts (*.ttf *.otf)")
+        path_str, _ = QFileDialog.getOpenFileName(parent, "Import Font", "", "Fonts (" + " ".join(f"*{e}" for e in sorted(FONT_EXTENSIONS)) + ")")
         if not path_str:
             return []
         return self._register_font_file(Path(path_str))

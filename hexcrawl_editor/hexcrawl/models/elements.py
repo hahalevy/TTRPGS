@@ -2,12 +2,15 @@
 
 Pure dataclasses, zero Qt imports, so the model can be unit tested headlessly.
 Serialization is generic (driven by the dataclass fields), so adding a field
-to an element type needs no extra (de)serialization code.
+to an element type needs no extra (de)serialization code. Field defaults come
+from resources/defaults.json (see hexcrawl/defaults.py).
 """
 from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field, fields
+
+from ..defaults import DEFAULTS
 
 
 def new_id() -> str:
@@ -32,6 +35,12 @@ class DecorationStyle:
 
 Point = tuple[float, float]
 
+
+def _decoration(kind: str, name: str):
+    """Default factory for a border/outline field, taken from the config."""
+    return lambda: DecorationStyle.from_dict(DEFAULTS[kind][name])
+
+
 # Converters from JSON values back to model values, keyed by field annotation.
 _FROM_JSON = {
     "DecorationStyle": DecorationStyle.from_dict,
@@ -41,13 +50,13 @@ _FROM_JSON = {
 }
 
 
-def _to_json(value):
+def to_json(value):
     if isinstance(value, DecorationStyle):
         return value.to_dict()
     if isinstance(value, tuple):
         return list(value)
     if isinstance(value, list):
-        return [_to_json(v) for v in value]
+        return [to_json(v) for v in value]
     if isinstance(value, dict):
         return dict(value)
     return value
@@ -62,7 +71,7 @@ class Element:
     z: int = 0
 
     def to_dict(self) -> dict:
-        return {f.name: _to_json(getattr(self, f.name)) for f in fields(self)}
+        return {f.name: to_json(getattr(self, f.name)) for f in fields(self)}
 
     @staticmethod
     def from_dict(data: dict) -> "Element":
@@ -92,9 +101,9 @@ class Element:
 class StrokeElement(Element):
     kind: str = "stroke"
     points: list[Point] = field(default_factory=list)
-    color: str = "#000000"
-    width: float = 3.0
-    line_style: str = "solid"  # "solid" | "dashed" | "dotted"
+    color: str = DEFAULTS["line"]["color"]
+    width: float = DEFAULTS["line"]["width"]
+    line_style: str = DEFAULTS["line"]["line_style"]  # "solid" | "dashed" | "dotted"
     rotation: float = 0.0
 
     def translated(self, dx: float, dy: float) -> dict:
@@ -104,14 +113,14 @@ class StrokeElement(Element):
 @dataclass
 class ShapeElement(Element):
     kind: str = "shape"
-    shape_type: str = "line"  # "line" | "rectangle" | "ellipse" | "triangle"
+    shape_type: str = DEFAULTS["shape"]["shape_type"]  # "line" | "rectangle" | "ellipse" | "triangle"
     p1: Point = (0.0, 0.0)
     p2: Point = (0.0, 0.0)
-    color: str = "#000000"
-    width: float = 3.0
-    line_style: str = "solid"
-    filled: bool = False
-    fill_color: str | None = None
+    color: str = DEFAULTS["shape"]["color"]
+    width: float = DEFAULTS["shape"]["width"]
+    line_style: str = DEFAULTS["shape"]["line_style"]
+    filled: bool = DEFAULTS["shape"]["filled"]
+    fill_color: str | None = DEFAULTS["shape"]["fill_color"]
     rotation: float = 0.0
 
     def translated(self, dx: float, dy: float) -> dict:
@@ -126,15 +135,15 @@ class LabelElement(Element):
     kind: str = "label"
     text: str = ""
     pos: Point = (0.0, 0.0)
-    font_family: str = "Open Sans"
-    font_size: int = 14
-    font_color: str = "#000000"
-    opacity: float = 1.0
+    font_family: str = DEFAULTS["label"]["font_family"]
+    font_size: int = DEFAULTS["label"]["font_size"]
+    font_color: str = DEFAULTS["label"]["font_color"]
+    opacity: float = DEFAULTS["label"]["opacity"]
     rotation: float = 0.0
     scale_x: float = 1.0
     scale_y: float = 1.0
-    border: DecorationStyle = field(default_factory=DecorationStyle)
-    outline: DecorationStyle = field(default_factory=DecorationStyle)
+    border: DecorationStyle = field(default_factory=_decoration("label", "border"))
+    outline: DecorationStyle = field(default_factory=_decoration("label", "outline"))
 
     def translated(self, dx: float, dy: float) -> dict:
         return {"pos": (self.pos[0] + dx, self.pos[1] + dy)}
@@ -148,9 +157,9 @@ class AssetElement(Element):
     scale_x: float = 1.0
     scale_y: float = 1.0
     rotation: float = 0.0
-    opacity: float = 1.0
-    border: DecorationStyle = field(default_factory=DecorationStyle)
-    outline: DecorationStyle = field(default_factory=DecorationStyle)
+    opacity: float = DEFAULTS["asset"]["opacity"]
+    border: DecorationStyle = field(default_factory=_decoration("asset", "border"))
+    outline: DecorationStyle = field(default_factory=_decoration("asset", "outline"))
 
     def translated(self, dx: float, dy: float) -> dict:
         return {"pos": (self.pos[0] + dx, self.pos[1] + dy)}
@@ -164,7 +173,7 @@ class FogMaskElement(Element):
 
     kind: str = "fog"
     regions: list[dict] = field(default_factory=list)  # [{"rect": [x,y,w,h], "mode": "hide"|"reveal"}]
-    color: str = "#000000"
+    color: str = DEFAULTS["fog"]["color"]
     base_opacity: float = 1.0
 
 

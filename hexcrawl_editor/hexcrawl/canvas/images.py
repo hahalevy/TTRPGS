@@ -10,8 +10,10 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImageReader, QPixmap
 
+from ..defaults import DEFAULTS
+
 HI_RES = 512  # longest side, in pixels, that vector images are rendered at
-ASSET_SIZE = 48.0  # default on-map size (longest side, scene units) of every placed asset
+ASSET_SIZE = DEFAULTS["asset"]["size"]  # default on-map size (longest side, scene units) of every placed asset
 
 
 def image_extensions() -> set[str]:

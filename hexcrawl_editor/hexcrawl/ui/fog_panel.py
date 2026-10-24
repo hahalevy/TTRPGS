@@ -19,5 +19,5 @@ class FogPanel(QDockWidget):
         mode, color = choice_combo(FOG_MODES), choice_combo(FOG_COLOR_CHOICES)
         form.addRow("Mode", mode)
         form.addRow("Color", color)
-        self.binder = FieldBinder({"mode": mode, "color": color}, self)
+        self.binder = FieldBinder({"mode": mode, "color": color}, self, key="fog")
         self.setWidget(container)

@@ -5,9 +5,9 @@ from pathlib import Path
 
 from PySide6.QtCore import QMimeData, Qt, QTimer
 from PySide6.QtGui import QAction, QCursor, QGuiApplication, QKeySequence, QUndoStack
-from PySide6.QtWidgets import QFileDialog, QMainWindow, QMessageBox
+from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow, QMessageBox
 
-from ..app_config import ASSETS_DIR, MAPS_DIR
+from ..app_config import ASSETS_DIR, MAPS_DIR, use_preferences
 from ..canvas.images import image_extensions
 from ..canvas.scene import HexcrawlScene
 from ..canvas.tools import AssetTool, FogTool, LabelTool, LineTool, ShapeTool
@@ -15,6 +15,7 @@ from ..canvas.view import HexcrawlView
 from ..commands import delete_items, edit_element, push_as_one
 from ..commands.element_commands import AddElementCommand
 from ..commands.fields import SetElementFieldsCommand
+from ..defaults import DEFAULTS
 from ..io.exporter import export_png
 from ..io.project_file import load_project, save_project
 from ..models.elements import Element
@@ -46,12 +47,14 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.view)
         self._current_project_path: Path | None = None
         self._selected_element_id: str | None = None
+        self._unsaved_outside_undo = False
 
         self._setup_toolbar()
         self._setup_docks()
         self._setup_tools()
         self._setup_menus()
 
+        use_preferences(self.scene.project.preferences)
         self.scene.rebuild_from_project(self.scene.project)  # blank until a base map is chosen
         self.layer_panel.refresh()
 
@@ -96,6 +99,10 @@ class MainWindow(QMainWindow):
             self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
         for first, second in zip(palette, palette[1:]):
             self.tabifyDockWidget(first, second)
+
+        # Panels can be rearranged but never closed or floated away (no way to bring them back).
+        for dock in (self.layer_panel, *palette):
+            dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable)
 
         # Element kind -> (panel to show, binder that edits it, Draw section).
         # The same binder supplies settings for new elements of that kind.
@@ -287,8 +294,10 @@ class MainWindow(QMainWindow):
         return path
 
     def _load(self, project: Project) -> None:
+        use_preferences(project.preferences)  # panels switch to this project's last-used values
         self.scene.rebuild_from_project(project)
-        self.undo_stack.clear()
+        self.undo_stack.clear()  # also makes the stack clean
+        self._unsaved_outside_undo = False
         self.layer_panel.refresh()
         self.view.zoom_reset()
 
@@ -296,15 +305,20 @@ class MainWindow(QMainWindow):
         """Asks for the base map image; the new project starts with it as the
         bottom "Base Map" layer plus an empty drawing layer. Cancel keeps the
         current project."""
+        if not self.confirm_discard_changes():
+            return False
         path = self._ask_for_base_map("New project - choose a base map")
         if not path:
             return False
-        project = Project(base_map_path=path, layers=[Layer(name="Base Map", base_map=True), Layer(name="Layer 1")])
+        project = Project(base_map_path=path, layers=[Layer(name=DEFAULTS["project"]["base_layer_name"], base_map=True),
+                                         Layer(name=DEFAULTS["project"]["first_layer_name"])])
         self._load(project)
         self._current_project_path = None
         return True
 
     def _open_project(self) -> None:
+        if not self.confirm_discard_changes():
+            return
         path_str, _ = QFileDialog.getOpenFileName(self, "Open Project", "", "Hexcrawl Project (*.hexproj)")
         if not path_str:
             return
@@ -314,17 +328,50 @@ class MainWindow(QMainWindow):
         self._load(project)
         self._current_project_path = Path(path_str)
 
-    def _save_project(self) -> None:
+    def _save_project(self) -> bool:
+        """Saves (asking for a file if the project has none yet). False if the
+        user cancelled the file dialog."""
         if self._current_project_path is None:
-            self._save_project_as()
-        else:
-            save_project(self.scene.project, self._current_project_path)
+            return self._save_project_as()
+        self._write_project(self._current_project_path)
+        return True
 
-    def _save_project_as(self) -> None:
+    def _save_project_as(self) -> bool:
         path_str, _ = QFileDialog.getSaveFileName(self, "Save Project As", "", "Hexcrawl Project (*.hexproj)")
-        if path_str:
-            self._current_project_path = Path(path_str).with_suffix(".hexproj")
-            save_project(self.scene.project, self._current_project_path)
+        if not path_str:
+            return False
+        self._current_project_path = Path(path_str).with_suffix(".hexproj")
+        self._write_project(self._current_project_path)
+        return True
+
+    def _write_project(self, path: Path) -> None:
+        save_project(self.scene.project, path)
+        self.undo_stack.setClean()  # the undo stack's clean point = what is on disk
+        self._unsaved_outside_undo = False
+
+    def has_unsaved_changes(self) -> bool:
+        return not self.undo_stack.isClean() or self._unsaved_outside_undo
+
+    def confirm_discard_changes(self) -> bool:
+        """True if it is OK to replace/close the current project: nothing
+        unsaved, or the user saved or chose to discard. False = stay."""
+        if not self.has_unsaved_changes():
+            return True
+        box = QMessageBox(QMessageBox.Icon.Warning, "Unsaved changes",
+                          "This project has unsaved changes. Save them first?",
+                          QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard
+                          | QMessageBox.StandardButton.Cancel, self)
+        box.setDefaultButton(QMessageBox.StandardButton.Save)
+        choice = box.exec()
+        if choice == QMessageBox.StandardButton.Save:
+            return self._save_project()  # opens Save As for a project with no file yet
+        return choice == QMessageBox.StandardButton.Discard
+
+    def closeEvent(self, event) -> None:
+        if self.confirm_discard_changes():
+            event.accept()
+        else:
+            event.ignore()
 
     def open_map_settings(self) -> None:
         """Base map opacity + background color, regardless of the selected layer."""
@@ -336,6 +383,7 @@ class MainWindow(QMainWindow):
         path = self._ask_for_base_map("Replace base map")
         if path:
             self.scene.set_base_map(path)
+            self._unsaved_outside_undo = True  # swapping the map isn't an undoable edit
             self.layer_panel.refresh()
 
     def _export_png(self) -> None:
