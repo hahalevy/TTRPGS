@@ -21,21 +21,6 @@ from hexcrawl.ui.main_window import MainWindow
 L, R, NONE = Qt.MouseButton.LeftButton, Qt.MouseButton.RightButton, Qt.MouseButton.NoButton
 
 
-@pytest.fixture
-def win():
-    app = QApplication.instance() or QApplication([])
-    w = MainWindow()
-    w.resize(1400, 900)
-    w.show()
-    for _ in range(3):
-        app.processEvents()
-    yield w
-    w.scene.selectionChanged.disconnect()
-    w.undo_stack.clear()  # tests leave edits behind; don't trigger the unsaved-changes prompt
-    w._unsaved_outside_undo = False
-    w.close()
-
-
 def _event(w, kind, scene_pt, button, buttons=None):
     vp = w.view.mapFromScene(QPointF(*scene_pt))
     return QMouseEvent(kind, QPointF(vp), QPointF(w.view.viewport().mapToGlobal(vp)), button,
@@ -524,7 +509,8 @@ def test_last_used_values_belong_to_the_project(win, tmp_path):
 def test_panels_cannot_be_closed_or_floated(win):
     from PySide6.QtWidgets import QDockWidget
 
-    docks = win.findChildren(QDockWidget)
+    # The notes overview (closable; View > Notes reopens it) and the floating note editor are the exceptions.
+    docks = [d for d in win.findChildren(QDockWidget) if d not in (win.notes_overview, win.note_editor)]
     assert len(docks) == 5
     for dock in docks:
         assert dock.features() == QDockWidget.DockWidgetFeature.DockWidgetMovable

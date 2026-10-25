@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
 from ..commands import delete_items, edit_element, edit_layer
 from ..commands.layer_commands import AddLayerCommand
 from ..models.layer import Layer
+from ..models.targets import KIND_LABELS
+from .widgets import confirm
 
 LAYER_ROLE = Qt.ItemDataRole.UserRole
 ELEMENT_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -17,15 +19,7 @@ ELEMENT_ROLE = Qt.ItemDataRole.UserRole + 1
 NAME_COL = 0  # checkbox here = "marked" for bulk actions (not visibility)
 VISIBLE_COL = 1  # eye icon, click to show/hide
 TYPE_COL = 2
-
-KIND_LABELS = {
-    "stroke": "Line",
-    "shape": "Shape",
-    "label": "Label",
-    "asset": "Asset",
-    "fog": "Effect",
-}
-
+NOTES_COL = 3  # how many notes are attached to the row
 
 def _eye_icon(visible: bool) -> QIcon:
     pixmap = QPixmap(18, 18)
@@ -66,12 +60,13 @@ class LayerPanel(QDockWidget):
         layout = QVBoxLayout(container)
 
         self.tree = QTreeWidget()
-        self.tree.setColumnCount(3)
-        self.tree.setHeaderLabels(["Name", "Visible", "Type"])
+        self.tree.setColumnCount(4)
+        self.tree.setHeaderLabels(["Name", "Visible", "Type", "Notes"])
         header = self.tree.header()
         header.setSectionResizeMode(NAME_COL, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(VISIBLE_COL, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(TYPE_COL, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(NOTES_COL, QHeaderView.ResizeMode.ResizeToContents)
         header.setStretchLastSection(False)
         self.tree.setSelectionMode(QTreeWidget.SelectionMode.SingleSelection)
         self.tree.itemChanged.connect(self._on_item_changed)
@@ -123,7 +118,9 @@ class LayerPanel(QDockWidget):
             self._suppress_item_changed = False
 
     def _make_row(self, item_id: str, name: str, visible: bool, type_label: str, role) -> QTreeWidgetItem:
-        row = QTreeWidgetItem([name, "", type_label])
+        notes = len(self.scene.project.notes_for(item_id))
+        row = QTreeWidgetItem([name, "", type_label, str(notes) if notes else ""])
+        row.setTextAlignment(NOTES_COL, Qt.AlignmentFlag.AlignCenter)
         row.setFlags(row.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEditable)
         row.setCheckState(NAME_COL, Qt.CheckState.Checked if item_id in self._marked_ids else Qt.CheckState.Unchecked)
         row.setIcon(VISIBLE_COL, self._eye_on if visible else self._eye_off)
@@ -227,8 +224,7 @@ class LayerPanel(QDockWidget):
         return obj.name or KIND_LABELS.get(getattr(obj, "kind", ""), "")
 
     def _confirm(self, title: str, text: str) -> bool:
-        buttons = QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        return QMessageBox.question(self, title, f"{text} (Ctrl+Z to undo)", buttons) == QMessageBox.StandardButton.Yes
+        return confirm(self, title, text)
 
     # --- buttons ---
     def _add_layer(self) -> None:

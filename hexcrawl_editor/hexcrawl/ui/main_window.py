@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PySide6.QtCore import QMimeData, Qt, QTimer
+from PySide6.QtCore import QMimeData, QPoint, Qt, QTimer
 from PySide6.QtGui import QAction, QCursor, QGuiApplication, QKeySequence, QUndoStack
 from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow, QMessageBox
 
@@ -29,6 +29,9 @@ from .fog_panel import FogPanel
 from .font_manager import FontManager
 from .label_panel import LabelPanel
 from .layer_panel import LayerPanel
+from .notes.actions import NoteActions
+from .notes.editor_window import NoteEditorWindow
+from .notes.overview import NotesOverview
 from .toolbar import MainToolBar
 
 CLIPBOARD_MIME = "application/x-hexcrawl-elements"
@@ -89,6 +92,27 @@ class MainWindow(QMainWindow):
             lambda layer_id: EffectsDialog(self.scene, self.undo_stack, layer_id, self).exec()
         )
         self.layer_panel.elementSelected.connect(self._select_element_on_canvas)
+        self.layer_panel.activeLayerChanged.connect(self._show_notes_for)
+
+        # Notes: an overview pane (a preview card per note) on the left, and a floating editing
+        # window for one note, so opening a note never shifts the map.
+        self.note_actions = NoteActions(self.scene, self.undo_stack)
+        self.notes_overview = NotesOverview(self.scene, self.note_actions)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.notes_overview)
+        self.notes_overview.setMinimumWidth(260)
+        self.notes_overview.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable
+                                        | QDockWidget.DockWidgetFeature.DockWidgetClosable)  # View > Notes reopens it
+        self.note_editor = NoteEditorWindow(self.scene, self.undo_stack, self.note_actions)
+        self.note_actions.flush = self.note_editor.flush
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.note_editor)
+        self.note_editor.setFloating(True)
+        self.note_editor.resize(500, 760)
+        self.note_editor.hide()
+        self._note_editor_placed = False
+        self.notes_overview.openRequested.connect(self._open_note)
+        self.notes_overview.noteCreated.connect(lambda note_id: self._open_note(note_id, focus_title=True))
+        self.note_editor.bodyEdited.connect(self._note_text_edited)
+        self.note_editor.targetRequested.connect(self._select_note_target)
 
         self.draw_panel = DrawPanel()
         self.fog_panel = FogPanel()
@@ -143,7 +167,7 @@ class MainWindow(QMainWindow):
         for title, handler in (
             ("New Project...", self.new_project), ("Open Project...", self._open_project),
             ("Save", self._save_project), ("Save As...", self._save_project_as),
-            ("Export PNG...", self._export_png),
+            ("Export PNG...", self._export_png), ("Export Notes...", lambda: self.note_actions.export(self, set())),
         ):
             action = QAction(title, self)
             action.triggered.connect(handler)
@@ -164,6 +188,9 @@ class MainWindow(QMainWindow):
         view_menu = self.menuBar().addMenu("&View")
         for action in (self.toolbar.zoom_in_action, self.toolbar.zoom_out_action, self.toolbar.zoom_reset_action):
             view_menu.addAction(action)
+
+        view_menu.addSeparator()
+        view_menu.addAction(self.notes_overview.toggleViewAction())
 
         map_menu = self.menuBar().addMenu("&Map")
         for title, handler in (("Base Map Settings...", self.open_map_settings),
@@ -193,6 +220,26 @@ class MainWindow(QMainWindow):
         self.scene.set_active_layer(layer_id)
         self.layer_panel.set_active_layer_highlight(layer_id)
 
+    def _show_notes_for(self, target_id: str) -> None:
+        self.notes_overview.show_target(target_id)
+        self.note_editor.selected_id = target_id
+        self.notes_overview.show()
+
+    def _open_note(self, note_id: str, focus_title: bool = False) -> None:
+        if not self._note_editor_placed:  # first time: near the main window's left edge
+            self._note_editor_placed = True
+            self.note_editor.move(self.mapToGlobal(self.rect().topLeft()) + QPoint(300, 90))
+        self.note_editor.open_note(note_id, focus_title)
+
+    def _note_text_edited(self) -> None:
+        self._unsaved_outside_undo = True  # note text has its own undo inside the editor
+
+    def _select_note_target(self, target_id: str) -> None:
+        if self.scene.element_for_id(target_id) is not None:
+            self._select_element_on_canvas(target_id)
+        else:
+            self._set_active_layer(target_id)
+
     def _on_selection_changed(self) -> None:
         selected = self.scene.selectedItems()
         element = self.scene.element_for_id(selected[0].data(0)) if len(selected) == 1 else None
@@ -202,6 +249,7 @@ class MainWindow(QMainWindow):
         layer = self.scene.layer_for_element(element.id)
         if layer.id != self.scene.active_layer_id:  # selecting engages the element's layer
             self._set_active_layer(layer.id)
+        self._show_notes_for(element.id)
         editor = self._editors.get(element.kind)
         if editor is not None:
             dock, binder, section = editor
@@ -284,6 +332,7 @@ class MainWindow(QMainWindow):
         # Deferred: pushes often originate inside the layer tree's own
         # click/edit handling, where a synchronous rebuild would crash.
         self.layer_panel.request_refresh()
+        self.notes_overview.request_refresh()  # an element coming or going changes which notes are attached
 
     # --- file actions ---
     def _image_filter(self) -> str:
@@ -299,6 +348,9 @@ class MainWindow(QMainWindow):
         self.undo_stack.clear()  # also makes the stack clean
         self._unsaved_outside_undo = False
         self.layer_panel.refresh()
+        self.notes_overview.selected_id = ""
+        self.notes_overview.refresh()
+        self.note_editor.reset()
         self.view.zoom_reset()
 
     def new_project(self) -> bool:
@@ -345,11 +397,13 @@ class MainWindow(QMainWindow):
         return True
 
     def _write_project(self, path: Path) -> None:
+        self.note_editor.flush()
         save_project(self.scene.project, path)
         self.undo_stack.setClean()  # the undo stack's clean point = what is on disk
         self._unsaved_outside_undo = False
 
     def has_unsaved_changes(self) -> bool:
+        self.note_editor.flush()
         return not self.undo_stack.isClean() or self._unsaved_outside_undo
 
     def confirm_discard_changes(self) -> bool:

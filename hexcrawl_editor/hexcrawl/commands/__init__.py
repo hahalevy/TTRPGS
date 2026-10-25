@@ -5,6 +5,7 @@ dicts or push no-op commands.
 from .element_commands import DeleteElementCommand
 from .fields import SetElementFieldsCommand, SetLayerFieldsCommand, SetProjectFieldsCommand
 from .layer_commands import DeleteLayerCommand
+from .note_commands import SetNoteFieldsCommand
 
 
 def _edit(command_class, undo_stack, scene, target, new_values: dict, text: str) -> None:
@@ -19,6 +20,10 @@ def edit_element(undo_stack, scene, element, new_values: dict, text: str = "Edit
 
 def edit_layer(undo_stack, scene, layer, new_values: dict, text: str = "Edit layer") -> None:
     _edit(SetLayerFieldsCommand, undo_stack, scene, layer, new_values, text)
+
+
+def edit_note(undo_stack, scene, note, new_values: dict, text: str = "Edit note") -> None:
+    _edit(SetNoteFieldsCommand, undo_stack, scene, note, new_values, text)
 
 
 def edit_project(undo_stack, scene, new_values: dict, text: str = "Edit map settings") -> None:

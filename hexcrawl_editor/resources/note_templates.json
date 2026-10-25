@@ -1,0 +1,35 @@
+{
+  "_help": "Note templates offered by the Notes pane. Each section may have a heading, 'fields' (bold labels to fill in on one line each), and a body 'kind': text (default), numbered or bullets. Edit or add templates and restart; a template is only a starting point and everything it inserts stays editable.",
+  "templates": [
+    {
+      "name": "Monster Lair",
+      "sections": [
+        {"fields": ["Creature", "Number appearing", "Treasure"]},
+        {"heading": "Description"},
+        {"heading": "Map"},
+        {"heading": "Room Key", "kind": "numbered"}
+      ]
+    },
+    {
+      "name": "Settlement",
+      "sections": [
+        {"fields": ["Category (village / town / city)", "Population", "Military forces"]},
+        {"heading": "Notable NPCs", "kind": "bullets"},
+        {"heading": "Notable Locales", "kind": "bullets"},
+        {"heading": "Map"},
+        {"heading": "Rumors", "kind": "numbered"},
+        {"heading": "Hooks & Quests", "kind": "bullets"}
+      ]
+    },
+    {
+      "name": "Wilderness Locale",
+      "sections": [
+        {"heading": "Description"},
+        {"heading": "Monsters", "kind": "bullets"},
+        {"heading": "Treasure"},
+        {"heading": "Map"},
+        {"heading": "Area Key", "kind": "numbered"}
+      ]
+    }
+  ]
+}

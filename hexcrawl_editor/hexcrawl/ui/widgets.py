@@ -3,7 +3,7 @@ configured in exactly one place."""
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QSlider
+from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QMessageBox, QSlider
 
 
 def combo(items: list[str]) -> QComboBox:
@@ -34,3 +34,10 @@ def opacity_slider() -> tuple[QSlider, float]:
     widget.setRange(0, 100)
     widget.setValue(100)
     return widget, 0.01
+
+
+def confirm(parent, title: str, text: str) -> bool:
+    """Yes/No question; every delete-type action asks through here."""
+    buttons = QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+    answer = QMessageBox.question(parent, title, f"{text} (Ctrl+Z to undo)", buttons, QMessageBox.StandardButton.No)
+    return answer == QMessageBox.StandardButton.Yes

@@ -27,3 +27,21 @@ def fail_on_slot_exceptions():
     assert not errors, "exception in a Qt handler: " + "".join(
         __import__("traceback").format_exception(*errors[0])
     )
+
+
+@pytest.fixture
+def win():
+    from PySide6.QtWidgets import QApplication
+    from hexcrawl.ui.main_window import MainWindow
+
+    app = QApplication.instance() or QApplication([])
+    w = MainWindow()
+    w.resize(1400, 900)
+    w.show()
+    for _ in range(3):
+        app.processEvents()
+    yield w
+    w.scene.selectionChanged.disconnect()
+    w.undo_stack.clear()  # tests leave edits behind; don't trigger the unsaved-changes prompt
+    w._unsaved_outside_undo = False
+    w.close()

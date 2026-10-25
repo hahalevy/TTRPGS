@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QRectF, Qt
+from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QGraphicsItem, QGraphicsPixmapItem, QGraphicsRectItem, QGraphicsScene
 
 from ..defaults import DEFAULTS
 from ..models.elements import Element
 from ..models.layer import Layer
+from ..models.notes import Note
 from ..models.project import Project
 from .images import load_image
 from .items.asset_item import AssetItem
@@ -22,6 +23,8 @@ BACKGROUND_Z = -1_000_000  # below every layer
 
 
 class HexcrawlScene(QGraphicsScene):
+    notes_changed = Signal()  # a note was added, removed or edited (by a command)
+
     def __init__(self, assets_dir: Path, parent=None):
         super().__init__(parent)
         self.assets_dir = assets_dir
@@ -208,6 +211,14 @@ class HexcrawlScene(QGraphicsScene):
             self.removeItem(item)
         for layer in self.project.layers:
             layer.elements = [e for e in layer.elements if e.id != element_id]
+
+    def insert_note(self, note: Note, index: int) -> None:
+        self.project.notes.insert(min(index, len(self.project.notes)), note)
+        self.notes_changed.emit()
+
+    def remove_note(self, note_id: str) -> None:
+        self.project.notes = [n for n in self.project.notes if n.id != note_id]
+        self.notes_changed.emit()
 
     # --- lookups ---
     def item_for_element(self, element_id: str):
